@@ -5,6 +5,9 @@ interface
 uses
   Forms, wclBluetooth, Classes, Controls, StdCtrls;
 
+const
+  BUF_SIZE = 2048;
+
 type
   TfmMain = class(TForm)
     wclBluetoothManager: TwclBluetoothManager;
@@ -14,6 +17,10 @@ type
     btDisconnect: TButton;
     ListBox: TListBox;
     btClear: TButton;
+    laPackatesCaption: TLabel;
+    laPackets: TLabel;
+    laErrorsCaption: TLabel;
+    laErrors: TLabel;
     procedure btClearClick(Sender: TObject);
     procedure FormDestroy(Sender: TObject);
     procedure btConnectClick(Sender: TObject);
@@ -31,6 +38,18 @@ type
     procedure wclGattClientConnect(Sender: TObject; const Error: Integer);
     procedure wclGattClientCharacteristicChanged(Sender: TObject;
       const Handle: Word; const Value: TwclGattCharacteristicValue);
+    procedure FormCreate(Sender: TObject);
+    procedure wclGattClientConnectionParamsChanged(Sender: TObject);
+
+  private
+    FMtuSize: Word;
+    FBuf: array [0..BUF_SIZE - 1] of Byte;
+    FIndex: Integer;
+    FCounter: Cardinal;
+    FErrors: Integer;
+
+    procedure UpdateMtuSize;
+    procedure UpdateConnectionParams;
   end;
 
 var
@@ -39,11 +58,14 @@ var
 implementation
 
 uses
-  wclErrors, Dialogs, SysUtils;
+  wclErrors, Dialogs, SysUtils, Windows;
 
 const
   SERVICE_UUID: TGUID = '{4D97EA15-CFD2-4C76-9AD6-0E49040BC496}';
   CHARACTERISTIC_UUID: TGUID = '{89F2BD95-D019-4057-BEAA-50DE0016442C}';
+
+var
+  Buf: array [0..BUF_SIZE - 1] of Byte;
 
 {$R *.dfm}
 
@@ -148,20 +170,16 @@ end;
 procedure TfmMain.wclGattClientDisconnect(Sender: TObject;
   const Reason: Integer);
 begin
+  laPackets.Caption := '0';
+  laErrors.Caption := '0';
+
   ListBox.Items.Add('Client disconnect: 0x' + IntToHex(Reason, 8));
   wclBluetoothManager.Close;
 end;
 
 procedure TfmMain.wclGattClientMaxPduSizeChanged(Sender: TObject);
-var
-  Res: Integer;
-  Size: Word;
 begin
-  Res := wclGattClient.GetMaxPduSize(Size);
-  if Res = WCL_E_SUCCESS then
-    ListBox.Items.Add('Max PDU size changed: ' + IntToStr(Size))
-  else
-    ListBox.Items.Add('Max PDU size changed');
+  UpdateMtuSize;
 end;
 
 procedure TfmMain.wclGattClientConnect(Sender: TObject;
@@ -171,7 +189,6 @@ var
   Uuid: TwclGattUuid;
   Service: TwclGattService;
   Characteristic: TwclGattCharacteristic;
-  Size: Word;
 begin
   if Error <> WCL_E_SUCCESS then begin
     ListBox.Items.Add('Connect faied: 0x' + IntToHex(Error, 8));
@@ -208,9 +225,12 @@ begin
           ListBox.Items.Add('Subscribe failed: 0x' + IntToHex(Res, 8))
 
         else begin
-          Res := wclGattClient.GetMaxPduSize(Size);
-          if Res = WCL_E_SUCCESS then
-            ListBox.Items.Add('Max PDU size: ' + IntToStr(Size));
+          FIndex := 0;
+          FCounter := 0;
+          FErrors := 0;
+
+          UpdateMtuSize;
+          UpdateConnectionParams;
         end;
       end;
     end;
@@ -224,16 +244,56 @@ end;
 
 procedure TfmMain.wclGattClientCharacteristicChanged(Sender: TObject;
   const Handle: Word; const Value: TwclGattCharacteristicValue);
-var
-  Number: Cardinal;
 begin
   if Length(Value) > 0 then begin
-    Number := Value[0] + (Value[1] shr 8) + (Value[2] shr 16) +
-      (Value[3] shr 24);
-    ListBox.Items.Add('Received ' + IntToStr(Number) + ': ' +
-      IntToStr(Value[5]) + ' from ' + IntToStr(Value[4]) + '; length = ' +
-      IntToStr(Length(Value)));
-    ListBox.TopIndex := ListBox.Items.Count - 1;
+    CopyMemory(@FBuf[FIndex], Pointer(Value), Length(Value));
+    FIndex := FIndex + Length(Value);
+
+    if FIndex >= BUF_SIZE then begin
+      if not CompareMem(@FBuf[0], @Buf[0], BUF_SIZE) then
+        Inc(FErrors);
+
+      Inc(FCounter);
+      FIndex := 0;
+
+      laPackets.Caption := IntToStr(FCounter);
+      laErrors.Caption := IntToStr(FErrors);
+    end;
+  end;
+end;
+
+procedure TfmMain.FormCreate(Sender: TObject);
+var
+  i: Integer;
+  Cnt: Byte;
+begin
+  Cnt := 0;
+  for i := 0 to BUF_SIZE - 1 do begin
+    Buf[i] := Cnt;
+    Inc(Cnt);
+  end;
+end;
+
+procedure TfmMain.wclGattClientConnectionParamsChanged(Sender: TObject);
+begin
+  UpdateConnectionParams;
+end;
+
+procedure TfmMain.UpdateMtuSize;
+begin
+  if wclGattClient.GetMaxPduSize(FMtuSize) = WCL_E_SUCCESS then
+    ListBox.Items.Add('Max PDU size: ' + IntToStr(FMtuSize));
+end;
+
+procedure TfmMain.UpdateConnectionParams;
+var
+  Params: TwclBluetoothLeConnectionParameters;
+begin
+  if wclGattClient.GetConnectionParams(Params) = WCL_E_SUCCESS then begin
+    ListBox.Items.Add('Connection params:');
+    ListBox.Items.Add('  Interval: ' + IntToStr(Params.Interval));
+    ListBox.Items.Add('  Latency: ' + IntToStr(Params.Latency));
+    ListBox.Items.Add('  Timeout: ' + IntToStr(Params.LinkTimeout));
   end;
 end;
 

@@ -3,5 +3,5 @@
     "board": "esp32:esp32:esp32c3",
     "output": ".\\build",
     "sketch": "GattNotifyTest.ino",
-    "port": "COM6"
+    "port": "COM9"
 }

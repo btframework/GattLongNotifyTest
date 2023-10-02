@@ -13,9 +13,38 @@ object fmMain: TfmMain
   Font.Style = []
   OldCreateOrder = False
   Position = poScreenCenter
+  OnCreate = FormCreate
   OnDestroy = FormDestroy
   PixelsPerInch = 96
   TextHeight = 13
+  object laPackatesCaption: TLabel
+    Left = 8
+    Top = 48
+    Width = 42
+    Height = 13
+    Caption = 'Packets:'
+  end
+  object laPackets: TLabel
+    Left = 64
+    Top = 48
+    Width = 6
+    Height = 13
+    Caption = '0'
+  end
+  object laErrorsCaption: TLabel
+    Left = 176
+    Top = 48
+    Width = 30
+    Height = 13
+    Caption = 'Errors:'
+  end
+  object laErrors: TLabel
+    Left = 208
+    Top = 48
+    Width = 6
+    Height = 13
+    Caption = '0'
+  end
   object btConnect: TButton
     Left = 8
     Top = 8
@@ -37,9 +66,9 @@ object fmMain: TfmMain
   end
   object ListBox: TListBox
     Left = 8
-    Top = 40
+    Top = 72
     Width = 729
-    Height = 505
+    Height = 473
     ItemHeight = 13
     TabOrder = 2
   end
@@ -61,6 +90,7 @@ object fmMain: TfmMain
   object wclGattClient: TwclGattClient
     OnCharacteristicChanged = wclGattClientCharacteristicChanged
     OnConnect = wclGattClientConnect
+    OnConnectionParamsChanged = wclGattClientConnectionParamsChanged
     OnDisconnect = wclGattClientDisconnect
     OnMaxPduSizeChanged = wclGattClientMaxPduSizeChanged
     Left = 168
